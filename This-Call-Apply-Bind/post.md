@@ -241,3 +241,172 @@ Odds are you’ve heard of and used an arrow function before. They’re new as o
 friends.map((friend) => friend.name)
 
 ```
+
+Even more than conciseness, arrow functions have a much more intuitive approach when it comes to `this` keyword. Unlike normal functions, arrow functions don’t have their own `this`. Instead, `this` is determined `lexically`. That’s a fancy way of saying `this` is determined how you’d expect, following the normal variable lookup rules. Let’s continue with the example we used earlier. Now, instead of having `languages` and `greet` as separate from the object, let’s combine them.
+
+```javascript
+
+const user = {
+  name: 'Tyler',
+  age: 27,
+  languages: ['JavaScript', 'Ruby', 'Python'],
+  greet() {}
+}
+
+```
+
+Earlier we assumed that the `languages` array would always have a length of 3. By doing so we were able to use hardcoded variables like `l1`, `l2`, and `l3`. Let’s make greet a little more intelligent now and assume that `languages` can be of any length. To do this, we’ll use `.reduce` in order to create our string.
+
+```javascript
+
+const user = {
+  name: 'Tyler',
+  age: 27,
+  languages: ['JavaScript', 'Ruby', 'Python'],
+  greet() {
+    const hello = `Hello, my name is ${this.name} and I know`
+
+    const langs = this.languages.reduce(function (str, lang, i) {
+      if (i === this.languages.length - 1) {
+        return `${str} and ${lang}.`
+      }
+
+      return `${str} ${lang},`
+    }, "")
+
+    alert(hello + langs)
+  }
+}
+
+```
+
+That’s a lot more code but the end result should be the same. When we invoke `user.greet()`, we expect to see `Hello, my name is Tyler and I know JavaScript, Ruby, and Python. . Sadly, there’s an error. Can you spot it? Grab the code above and run it in your console. You’ll notice it’s throwing the error `Uncaught TypeError: Cannot read property 'length' of undefined`. Gross. The only place we’re using `.length` is on line 9, so we know our error is there.
+
+```javascript
+
+if (i === this.languages.length - 1) {}
+
+```
+
+According to our error, `this.langauges` is undefined. Let’s walk through our steps to figure out what that `this` keyword is referencing cause clearly, it’s not referencing `user` at it should be. First, we need to look at where the function is being invoked. Wait? Where is the function being invoked? The function is being passed to `.reduce` so we have no idea. We never actually see the invocation of our anonymous function since JavaScript does that itself in the implementation of `.reduce`. That’s the problem. We need to specify that we want the anonymous function we pass to `.reduce` to be invoked in the context of `user`. That way `this.languages` will reference `user.languages`. As we learned above, we can use `.bind`.
+
+```javascript
+
+const user = {
+  name: 'Tyler',
+  age: 27,
+  languages: ['JavaScript', 'Ruby', 'Python'],
+  greet() {
+    const hello = `Hello, my name is ${this.name} and I know`
+
+    const langs = this.languages.reduce(function (str, lang, i) {
+      if (i === this.languages.length - 1) {
+        return `${str} and ${lang}.`
+      }
+
+      return `${str} ${lang},`
+    }.bind(this), "")
+
+    alert(hello + langs)
+  }
+}
+
+```
+
+So we’ve seen how `.bind` solves the issue, but what does this have to do with arrow functions. Earlier I said that with arrow functions "`this` is determined `lexically`. That’s a fancy way of saying `this` is determined how you’d expect, following the normal variable lookup rules."
+
+In the code above, following just your natural intuition, what would the `this` keyword reference inside of the anonymous function? For me, it should reference `user`. There’s no reason to create a new context just because I had to pass a new function to `.reduce`. And with that intuition comes the often overlooked value of arrow functions. If we re-write the code above and do nothing but use an anonymous arrow function instead of an anonymous function declaration, everything “just works”.
+
+```javascript
+
+const user = {
+  name: 'Tyler',
+  age: 27,
+  languages: ['JavaScript', 'Ruby', 'Python'],
+  greet() {
+    const hello = `Hello, my name is ${this.name} and I know`
+
+    const langs = this.languages.reduce((str, lang, i) => {
+      if (i === this.languages.length - 1) {
+        return `${str} and ${lang}.`
+      }
+
+      return `${str} ${lang},`
+    }, "")
+
+    alert(hello + langs)
+  }
+}
+
+```
+
+Again the reason for this because with arrow functions, `this` is determined “lexically”. Arrow functions don’t have their own `this`. Instead, just like with variable lookups, the JavaScript interpreter will look to the enclosing (parent) scope to determine what `this` is referencing.
+
+## window Binding
+
+Finally is the “catch-all” case - the window binding. Let’s say we had the following code
+
+```javascript
+
+function sayAge () {
+  console.log(`My age is ${this.age}`)
+}
+
+const user = {
+  name: 'Tyler',
+  age: 27
+}
+
+```
+
+As we covered earlier, if you wanted to invoke `sayAge` in the context of `user`, you could use `.call`, `.apply`, or `.bind`. What would happen if we didn’t use any of those and instead just invoked `sayAge` as you normally would
+
+```javascript
+
+sayAge() // My age is undefined
+
+```
+
+What you’d get is, unsurprisingly, `My age is undefined` because `this.age` would be undefined. Here’s where things get a little weird. What’s really happening here is because there’s nothing to the left of the dot, we’re not using `.call`, `.apply`, `.bind`, or the `new` keyword, JavaScript is defaulting `this` to reference the `window` object. What that means is if we add an `age` property to the `window` object, then when we invoke our `sayAge` function again, `this.age` will no longer be undefined but instead, it’ll be whatever the `age` property is on the window object. Don’t believe me? Run this code,
+
+```javascript
+
+window.age = 27
+
+function sayAge () {
+  console.log(`My age is ${this.age}`)
+}
+
+```
+
+Pretty gnarly, right? That’s why the 5th rule is the `window Binding`. If none of the other rules are met, then JavaScript will default the `this` keyword to reference the `window` object.
+
+---
+
+>As of ES5, if you have “strict mode” enabled, JavaScript will do the right thing and instead of defaulting to the window object will just keep “this” as undefined.
+
+```javascript
+
+'use strict'
+
+window.age = 27
+
+function sayAge () {
+  console.log(`My age is ${this.age}`)
+}
+
+sayAge() // TypeError: Cannot read property 'age' of undefined
+
+```
+
+---
+
+So putting all of our rules into practice, whenever I see the `this` keyword inside of a function, these are the steps I take in order to figure out what it’s referencing.
+
+>1. Look to where the function was invoked.
+>2. Is there an object to the left of the dot? If so, that’s what the “this” keyword is referencing. If not, continue to #3.
+>3. Was the function invoked with “call”, “apply”, or “bind”? If so, it’ll explicitly state what the “this” keyword is referencing. If not, continue to #4.
+>4. Was the function invoked using the “new” keyword? If so, the “this” keyword is referencing the newly created object that was made by the JavaScript interpreter. If not, continue to #5.
+>5. Is “this” inside of an arrow function? If so, its reference may be found lexically in the enclosing (parent) scope. If not, continue to #6.
+>6. Are you in “strict mode”? If yes, the “this” keyword is undefined. If not, continue to #6.
+>7. JavaScript is weird. “this” is referencing the “window” object.
