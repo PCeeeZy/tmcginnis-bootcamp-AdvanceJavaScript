@@ -565,3 +565,33 @@ $("#btn").on("click", () => {
 It *looks* much better, but now we’re running into an issue. Can you spot it? In the second `.then` we want to to call `updateUI`. The problem is we need to pass `updateUI` both the `user` and the `weather`. Currently how we have it set up, we’re only receiving the `weather`, not the `user`. Somehow we need to figure out a way to make it so the promise that `getWeather` returns is resolved with both the `user` and the `weather`.
 
 Here’s the key. `resolve` is just a function. Any arguments you pass to it will be passed along to the function given to .then. What that means is that inside of `getWeather`, if we invoke `resolve` ourself, we can pass to it `weather` and `user`. Then, the second `.then` method in our chain will receive both `user` and `weather` as an argument.
+
+```javascript
+
+function getWeather(user) {
+  return new Promise((resolve, reject) => {
+    $.getJSON({
+      url: getLocationURL(user.location.split(',')),
+      success(weather) {
+        resolve({ user, weather: weather.query.results })
+      },
+      error: reject,
+    })
+  })
+}
+
+$("#btn").on("click", () => {
+  getUser("tylermcginnis")
+    .then(getWeather)
+    .then((data) => {
+      // Now, data is an object with a
+      // "weather" property and a "user" property.
+
+      updateUI(data)
+    })
+    .catch(showError)
+})
+
+```
+
+>You can play around with the [final code here](https://codesandbox.io/s/9lkl75vqxw)
