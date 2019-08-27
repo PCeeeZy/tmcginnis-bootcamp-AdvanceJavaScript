@@ -143,8 +143,256 @@ $("#btn").on("click", () => {
 
 If it helps, you can play around with the [live version here](https://codesandbox.io/s/v06mmo3j7l).
 
-Notice we’ve added a few more layers of callbacks. First we’re saying don’t run the initial AJAX request until the element with an id of btn is clicked. Once the button is clicked, we make the first request. If that request succeeds, we make a second request. If that request succeeds, we invoke the updateUI method passing it the data we got from both requests. Regardless of if you understood the code at first glance or not, objectively it’s much harder to read than the code before. This brings us to the topic of “Callback Hell”.
+Notice we’ve added a few more layers of callbacks. First we’re saying don’t run the initial AJAX request until the element with an id of `btn` is clicked. Once the button is clicked, we make the first request. If that request succeeds, we make a second request. If that request succeeds, we invoke the `updateUI` method passing it the data we got from both requests. Regardless of if you understood the code at first glance or not, objectively it’s much harder to read than the code before. This brings us to the topic of “Callback Hell”.
 
 As humans, we naturally think sequentially. When you have nested callbacks inside of nested callbacks, it forces you out of your natural way of thinking. Bugs happen when there’s a disconnect between how your software is read and how you naturally think.
 
 Like most solutions to software problems, a commonly prescribed approach for making “Callback Hell” easier to consume is to modularize your code.
+
+```javascript
+
+function getUser(id, onSuccess, onFailure) {
+  $.getJSON({
+    url: `https://api.github.com/users/${id}`,
+    success: onSuccess,
+    error: onFailure
+  })
+}
+
+function getWeather(user, onSuccess, onFailure) {
+  $.getJSON({
+    url: getLocationURL(user.location.split(',')),
+    success: onSuccess,
+    error: onFailure,
+  })
+}
+
+$("#btn").on("click", () => {
+  getUser("tylermcginnis", (user) => {
+    getWeather(user, (weather) => {
+      updateUI({
+        user,
+        weather: weather.query.results
+      })
+    }, showError)
+  }, showError)
+})
+
+```
+
+If it helps, you can play around with the [live version here](https://codesandbox.io/s/m587rq0lox).
+
+OK, the function names help us understand what’s going on, but is it objectively “better”? Not by much. We’ve put a band-aid over the readability issue of Callback Hell. The problem still exists that we naturally think sequentially and, even with the extra functions, nested callbacks break us out of that sequential way of thinking.
+
+---
+
+The next issue of callbacks has to do with [inversion of control](https://en.wikipedia.org/wiki/Inversion_of_control). When you write a callback, you’re assuming that the program you’re giving the callback to is responsible and will call it when (and only when) it’s supposed to. You’re essentially inverting the control of your program over to another program. When you’re dealing with libraries like jQuery, lodash, or even vanilla JavaScript, it’s safe to assume that the callback function will be invoked at the correct time with the correct arguments. However, for many third party libraries, callback functions are the interface for how you interact with them. It’s entirely plausible that a third party library could, whether on purpose or accidentally, break how they interact with your callback.
+
+```javascript
+
+function criticalFunction () {
+  // It's critical that this function
+  // gets called and with the correct
+  // arguments.
+}
+
+thirdPartyLib(criticalFunction)
+
+```
+
+Since you’re not the one calling `criticalFunction`, you have 0 control over when and with what argument it’s invoked. *Most* of the time this isn’t an issue, but when it is, it’s a big one.
+
+---
+
+## Promises
+Have you ever been to a busy restaurant without a reservation? When this happens, the restaurant needs a way to get back in contact with you when a table opens up. Historically, they’d just take your name and yell it when your table was ready. Then, as naturally occurs, they decided to start getting fancy. One solution was, instead of taking your name, they’d take your number and text you once a table opened up. This allowed you to be out of yelling range but more importantly, it allowed them to target your phone with ads whenever they wanted. Sound familiar? It should! OK, maybe it shouldn’t. It’s a metaphor for callbacks! **Giving your number to a restaurant is just like giving a callback function to a third party service. You *expect* the restaurant to text you when a table opens up, just like you *expect* the third party service to invoke your function when and how they said they would.** Once your number or callback function is in their hands though, you’ve lost all control.
+
+Thankfully, there is another solution that exists. One that, by design, allows you to keep all the control. You’ve probably even experienced it before - it’s that little buzzer thing they give you. You know, this one.
+
+![buzzer](./images/buzzy.png)
+
+If you’ve never used one before, the idea is simple. Instead of taking your name or number, they give you this device. When the device starts buzzing and glowing, your table is ready. You can still do whatever you’d like as you’re waiting for your table to open up, but now you don’t have to give up anything. In fact, it’s the exact opposite. **They** have to give **you** something. There is no inversion of control.
+
+The buzzer will always be in one of three different states - `pending`, `fulfilled`, or `rejected`.
+
+`pending` is the default, initial state. When they give you the buzzer, it’s in this state.
+
+`fulfilled` is the state the buzzer is in when it’s flashing and your table is ready.
+
+`rejected` is the state the buzzer is in when something goes wrong. Maybe the restaurant is about to close or they forgot someone rented out the restaurant for the night.
+
+Again, the important thing to remember is that you, the receiver of the buzzer, have all the control. If the buzzer gets put into `fulfilled`, you can go to your table. If it gets put into `fulfilled` and you want to ignore it, cool, you can do that too. If it gets put into `rejected`, that sucks but you can go somewhere else to eat. If nothing ever happens and it stays in `pending`, you never get to eat but you’re not actually out anything.
+
+Now that you’re a master of the restaurant buzzer thingy, let’s apply that knowledge to something that matters.
+
+**If giving the restaurant your number is like giving them a callback function, receiving the little buzzy thing is like receiving what’s called a “Promise”.**
+
+As always, let’s start with **why**. Why do Promises exist? They exist to make the complexity of making asynchronous requests more manageable. Exactly like the buzzer, a `Promise` can be in one of three states, `pending`, `fulfilled` or `rejected`. Unlike the buzzer, instead of these states representing the status of a table at a restaurant, they represent the status of an asynchronous request.
+
+If the async request is still ongoing, the `Promise` will have a status of `pending`. If the async request was successfully completed, the `Promise` will change to a status of `fulfilled`. If the async request failed, the `Promise` will change to a status of `rejected`. The buzzer metaphor is pretty spot on, right?
+
+Now that you understand why Promises exist and the different states they can be in, there are three more questions we need to answer.
+
+>1. How do you create a Promise?
+>2. How do you change the status of a promise?
+>3. How do you listen for when the status of a promise changes?
+
+## 1- How do you create a Promise?
+This one is pretty straight forward. You create a `new` instance of `Promise`.
+
+```javascript
+
+const promise = new Promise()
+
+```
+
+## 2- How do you change the status of a promsie?
+The `Promise` constructor function takes in a single argument, a (callback) function. This function is going to be passed two arguments, `resolve` and `reject`.
+
+`resolve` - a function that allows you to change the status of the promise to `fulfilled`
+
+`reject` - a function that allows you to change the status of the promise to `rejected`.
+
+In the code below, we use `setTimeout` to wait 2 seconds and then invoke `resolve`. This will change the status of the promise to `fulfilled`.
+
+```javascript
+
+const promise = new Promise((resolve, reject) => {
+  setTimeout(() => {
+    resolve() // Change status to 'fulfilled'
+  }, 2000)
+})
+
+```
+
+We can see this change in action by logging the promise right after we create it and then again roughly 2 seconds later after `resolve` has been called.
+
+![resolve gif](./images/resolve.gif)
+
+Notice the promise goes from `<pending>` to `<resolved>`.
+
+## 3- How do you listen for when the status of a promise changes?
+In my opinion this is the most important question. It’s cool we know how to create a promise and change its status, but that’s worthless if we don’t know how to do anything after the status changes.
+
+One thing we haven’t talked about yet is what a promise actually is. When you create a `new Promise`, you’re really just creating a plain old JavaScript object. This object can invoke two methods, `then`, and `catch`. Here’s the key. When the status of the promise changes to `fulfilled`, the function that was passed to `.then` will get invoked. When the status of a promise changes to `rejected`, the function that was passed to `.catch` will be invoked. What this means is that once you create a promise, you’ll pass the function you want to run if the async request is successful to `.then`. You’ll pass the function you want to run if the async request fails to `.catch`.
+
+Let’s take a look at an example. We’ll use `setTimeout` again to change the status of the promise to `fulfilled` after two seconds (2000 milliseconds).
+
+```javascript
+
+function onSuccess () {
+  console.log('Success!')
+}
+
+function onError () {
+  console.log('💩')
+}
+
+const promise = new Promise((resolve, reject) => {
+  setTimeout(() => {
+    resolve()
+  }, 2000)
+})
+
+promise.then(onSuccess)
+promise.catch(onError)
+
+```
+
+If you run the code above you’ll notice that roughly 2 seconds later, you’ll see “Success!” in the console. Again the reason this happens is because of two things. First, when we created the promise, we invoked `resolve` after ~2000 milliseconds - this changed the status of the promise to `fulfilled`. Second, we passed the `onSuccess` function to the promises’ `.then` method. By doing that we told the promise to invoke `onSuccess` when the status of the promise changed to `fulfilled` which it did after ~2000 milliseconds.
+
+Now let’s pretend something bad happened and we wanted to change the status of the promise to `rejected`. Instead of calling `resolve`, we would call `reject`.
+
+```javascript
+
+function onSuccess () {
+  console.log('Success!')
+}
+
+function onError () {
+  console.log('💩')
+}
+
+const promise = new Promise((resolve, reject) => {
+  setTimeout(() => {
+    reject()
+  }, 2000)
+})
+
+promise.then(onSuccess)
+promise.catch(onError)
+
+```
+
+Now this time instead of the `onSuccess` function being invoked, the `onError` function will be invoked since we called `reject`.
+
+---
+
+Now that you know your way around the Promise API, let’s start looking at some real code.
+
+Remember the last async callback example we saw earlier?
+
+```javascript
+
+function getUser(id, onSuccess, onFailure) {
+  $.getJSON({
+    url: `https://api.github.com/users/${id}`,
+    success: onSuccess,
+    error: onFailure
+  })
+}
+
+function getWeather(user, onSuccess, onFailure) {
+  $.getJSON({
+    url: getLocationURL(user.location.split(',')),
+    success: onSuccess,
+    error: onFailure,
+  })
+}
+
+$("#btn").on("click", () => {
+  getUser("tylermcginnis", (user) => {
+    getWeather(user, (weather) => {
+      updateUI({
+        user,
+        weather: weather.query.results
+      })
+    }, showError)
+  }, showError)
+})
+
+```
+
+Is there anyway we could use the Promise API here instead of using callbacks? What if we wrap our AJAX requests inside of a promise? Then we can simply `resolve` or `reject` depending on how the request goes. Let’s start with `getUser`.
+
+```javascript
+
+function getUser(id) {
+  return new Promise((resolve, reject) => {
+    $.getJSON({
+      url: `https://api.github.com/users/${id}`,
+      success: resolve,
+      error: reject
+    })
+  })
+}
+
+```
+
+Nice. Notice that the parameters of getUser have changed. Instead of receiving `id`, `onSuccess`, and `onFailure`, it just receives `id`. There’s no more need for those other two callback functions because we’re no longer inverting control. Instead, we use the Promise’s `resolve` and `reject` functions. `resolve` will be invoked if the request was successful, `reject` will be invoked if there was an error.
+
+Next let’s refactor `getWeather`. We’ll follow the same strategy here. Instead of taking in `onSuccess` and `onFailure` callback functions, we’ll use `resolve` and `reject`.
+
+```javascript
+
+function getWeather(user) {
+  return new Promise((resolve, reject) => {
+    $.getJSON({
+      url: getLocationURL(user.location.split(',')),
+      success: resolve,
+      error: reject,
+    })
+  })
+}
+
+```
