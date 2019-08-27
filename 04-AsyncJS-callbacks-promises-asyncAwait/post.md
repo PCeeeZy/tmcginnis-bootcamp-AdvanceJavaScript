@@ -595,3 +595,170 @@ $("#btn").on("click", () => {
 ```
 
 >You can play around with the [final code here](https://codesandbox.io/s/9lkl75vqxw)
+
+It's in our click handler where you really see the power of promises shine compared to callbacks.
+
+```javascript
+
+// Callbacks 🚫
+getUser("tylermcginnis", (user) => {
+  getWeather(user, (weather) => {
+    updateUI({
+      user,
+      weather: weather.query.results
+    })
+  }, showError)
+}, showError)
+
+
+// Promises ✅
+getUser("tylermcginnis")
+  .then(getWeather)
+  .then((data) => updateUI(data))
+  .catch(showError);
+
+```
+
+Following that logic feels natural because it’s how we’re used to thinking, sequentially. `getUser then getWeather then update the UI with the data`.
+
+---
+
+Now it’s clear that promises drastically increase the readability of our asynchronous code, but is there a way we can make it even better? Assume that you were on the TC39 committee and you had all the power to add new features to the JavaScript language. What steps, if any, would you take to improve this code?
+
+```javascript
+
+$("#btn").on("click", () => {
+  getUser("tylermcginnis")
+    .then(getWeather)
+    .then((data) => updateUI(data))
+    .catch(showError)
+})
+
+```
+
+As we’ve discussed, the code reads pretty nicely. Just as our brains work, it’s in a sequential order. One issue that we did run into was that we needed to thread the data (`users`) from the first async request all the way through to the last `.then`. This wasn’t a big deal, but it made us change up our `getWeather` function to also pass along `users`. What if we just wrote our asynchronous code the same way which we write our synchronous code? If we did, that problem would go away entirely and it would still read sequentially. Here’s an idea.
+
+```javascript
+
+$("#btn").on("click", () => {
+  const user = getUser('tylermcginnis')
+  const weather = getWeather(user)
+
+  updateUI({
+    user,
+    weather,
+  })
+})
+
+```
+
+Well, that would be nice. Our asynchronous code looks exactly like our synchronous code. There’s no extra steps our brain needs to take because we’re already very familiar with this way of thinking. Sadly, this obviously won’t work. As you know, if we were to run the code above, `user` and `weather` would both just be promises since that’s what `getUser` and `getWeather` return. But remember, we’re on TC39. We have all the power to add any feature to the language we want. As is, this code would be really tricky to make work. We’d have to somehow teach the JavaScript engine to know the difference between asynchronous function invocations and regular, synchronous function invocations on the fly. Let’s add a few keywords to our code to make it easier on the engine.
+
+First, let’s add a keyword to the main function itself. This could clue the engine to the fact that inside of this function, we’re going to have some asynchronous function invocations. Let’s use `async` for this.
+
+```javascript
+
+$("#btn").on("click", async () => {
+  const user = getUser('tylermcginnis')
+  const weather = getWeather(user)
+
+  updateUI({
+    user,
+    weather,
+  })
+})
+
+```
+
+Cool. That seems reasonable. Next let’s add another keyword to let the engine know exactly when a function being invoked is asynchronous and is going to return a promise. Let’s use `await`. As in, “Hey engine. This function is asynchronous and returns a promise. Instead of continuing on like you typically do, go ahead and ‘await’ the eventual value of the promise and return it before continuing”. With both of our new `async` and `await` keywords in play, our new code will look like this.
+
+```javascript
+
+$("#btn").on("click", async () => {
+  const user = await getUser('tylermcginnis')
+  const weather = await getWeather(user.location)
+
+  updateUI({
+    user,
+    weather,
+  })
+})
+
+```
+
+Pretty slick. We’ve invented a reasonable way to have our asynchronous code look and behave as if it were synchronous. Now the next step is to actually convince someone on TC39 that this is a good idea. Lucky for us, as you probably guessed by now, we don’t need to do any convincing because this feature is already part of JavaScript and it’s called `Async/Await`.
+
+Don’t believe me? [Here’s our live code now](https://codesandbox.io/s/00w10o19xn) that we’ve added Async/Await to it. Feel free to play around with it.
+
+---
+
+## async functions return a promise
+Now that you’ve seen the benefit of Async/Await, let’s discuss some smaller details that are important to know. First, anytime you add `async` to a function, that function is going to implicitly return a promise.
+
+```javascript
+
+async function getPromise(){}
+
+const promise = getPromise()
+
+```
+
+Even though `getPromise` is literally empty, it’ll still return a promise since it was an `async` function.
+
+If the `async` function returns a value, that value will also get wrapped in a promise. That means you’ll have to use `.then` to access it.
+
+```javascript
+
+async function add (x, y) {
+  return x + y
+}
+
+add(2,3).then((result) => {
+  console.log(result) // 5
+})
+
+```
+
+---
+
+## await without async is bad
+If you try to use the `await` keyword inside of a function that isn’t `async`, you’ll get an error.
+
+```javascript
+
+$("#btn").on("click", () => {
+  const user = await getUser('tylermcginnis') // SyntaxError: await is a reserved word
+  const weather = await getWeather(user.location) // SyntaxError: await is a reserved word
+
+  updateUI({
+    user,
+    weather,
+  })
+})
+
+```
+
+Here’s how I think about it. When you add `async` to a function it does two things. It makes it so the function itself returns (or wraps what gets returned in) a promise and makes it so you can use `await` inside of it.
+
+---
+
+## Error Handling
+You may have noticed we cheated a little bit. In our original code we had a way to catch any errors using `.catch`. When we switched to Async/Await, we removed that code. With Async/Await, the most common approach is to wrap your code in a `try/catch` block to be able to catch the error.
+
+```javascript
+
+$("#btn").on("click", async () => {
+  try {
+    const user = await getUser('tylermcginnis')
+    const weather = await getWeather(user.location)
+
+    updateUI({
+      user,
+      weather,
+    })
+  } catch (e) {
+    showError(e)
+  }
+})
+
+```
