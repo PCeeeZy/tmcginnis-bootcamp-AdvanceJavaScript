@@ -240,3 +240,268 @@ function Animal (name, energy) {
 }
 
 ```
+
+Here’s the cool thing about `new` - when you invoke a function using the `new` keyword, those two lines are done for you implicitly (“under the hood”) and the object that is created is called `this`.
+
+Using comments to show what happens under the hood and assuming the `Animal` constructor is called with the `new` keyword, it can be re-written as this.
+
+```javascript
+
+function Animal (name, energy) {
+  // const this = Object.create(Animal.prototype)
+
+  this.name = name
+  this.energy = energy
+
+  // return this
+}
+
+const leo = new Animal('Leo', 7)
+const snoop = new Animal('Snoop', 10)
+
+```
+
+and without the "under the hood" comments
+
+```javascript
+
+function Animal (name, energy) {
+  this.name = name
+  this.energy = energy
+}
+
+Animal.prototype.eat = function (amount) {
+  console.log(`${this.name} is eating.`)
+  this.energy += amount
+}
+
+Animal.prototype.sleep = function (length) {
+  console.log(`${this.name} is sleeping.`)
+  this.energy += length
+}
+
+Animal.prototype.play = function (length) {
+  console.log(`${this.name} is playing.`)
+  this.energy -= length
+}
+
+const leo = new Animal('Leo', 7)
+const snoop = new Animal('Snoop', 10)
+
+```
+
+Again the reason this works and that the `this` object is created for us is because we called the constructor function with the `new` keyword.  If you leave off `new` when you invoke the function, that `this` object never gets created nor does it get implicitly returned.  We can see the issue with this in the example below.
+
+```javascript
+
+function Animal (name, energy) {
+  this.name = name
+  this.energy = energy
+}
+
+const leo = Animal('Leo', 7)
+console.log(leo) // undefined
+
+```
+
+The name for this pattern is `Pseudoclassical Instantiation`.
+
+If JavaScript isn’t your first programming language, you might be getting a little restless.
+
+>“WTF this dude just re-created a crappier version of a Class” - You
+
+For those unfamiliar, a Class allows you to create a blueprint for an object. Then whenever you create an instance of that Class, you get an object with the properties and methods defined in the blueprint.
+
+Sound familiar? That’s basically what we did with our `Animal` constructor function above. However, instead of using the `class` keyword, we just used a regular old JavaScript function to re-create the same functionality. Granted, it took a little extra work as well as some knowledge about what happens “under the hood” of JavaScript but the results are the same.
+
+Here’s the good news. JavaScript isn’t a dead language. It’s constantly being improved and added to by the TC-39 committee. What that means is that even though the initial version of JavaScript didn’t support classes, there’s no reason they can’t be added to the official specification. In fact, that’s exactly what the TC-39 committee did. In 2015, EcmaScript (the official JavaScript specification) 6 was released with support for Classes and the `class` keyword. Let’s see how our `Animal` constructor function above would look like with the new class syntax.
+
+```javascript
+
+class Animal {
+  constructor(name, energy) {
+    this.name = name
+    this.energy = energy
+  }
+  eat(amount) {
+    console.log(`${this.name} is eating.`)
+    this.energy += amount
+  }
+  sleep(length) {
+    console.log(`${this.name} is sleeping.`)
+    this.energy += length
+  }
+  play(length) {
+    console.log(`${this.name} is playing.`)
+    this.energy -= length
+  }
+}
+
+const leo = new Animal('Leo', 7)
+const snoop = new Animal('Snoop', 10)
+
+```
+
+Pretty clean, right?
+
+So if this is the new way to create classes, why did we spend so much time going over the old way? The reason for that is because the new way (with the `class` keyword) is primarily just “syntactical sugar” over the existing way we’ve called the pseudo-classical pattern. In order to fully understand the convenience syntax of ES6 classes, you first must understand the pseudo-classical pattern.
+
+---
+
+At this point we’ve covered the fundamentals of JavaScript’s prototype. The rest of this post will be dedicated to understanding other “good to know” topics related to it. In another post, we’ll look at how we can take these fundamentals and use them to understand how inheritance works in JavaScript.
+
+---
+
+## Array Methods
+We talked in depth above about how if you want to share methods across instances of a class, you should stick those methods on the class’ (or function’s) prototype. We can see this same pattern demonstrated if we look at the `Array` class. Historically you’ve probably created your arrays like this
+
+```javascript
+
+const friends = []
+
+```
+
+Turns out that's just sugar over creating a `new` instance of the `Array` class.
+
+```javascript
+
+const friendsWithSugar = []
+
+const friendsWithoutSugar = new Array()
+
+```
+
+One thing you might have never thought about is how does every instance of an array have all of those built-in methods (`splice`, `slice`, `pop`, etc)?
+
+Well as you now know, it’s because those methods live on `Array.prototype` and when you create a new instance of `Array`, you use the `new` keyword which sets up that delegation to `Array.prototype` on failed lookups.
+
+We can see all the array’s methods by simply logging `Array.prototype`.
+
+```javascript
+
+console.log(Array.prototype)
+
+/*
+  concat: ƒn concat()
+  constructor: ƒn Array()
+  copyWithin: ƒn copyWithin()
+  entries: ƒn entries()
+  every: ƒn every()
+  fill: ƒn fill()
+  filter: ƒn filter()
+  find: ƒn find()
+  findIndex: ƒn findIndex()
+  forEach: ƒn forEach()
+  includes: ƒn includes()
+  indexOf: ƒn indexOf()
+  join: ƒn join()
+  keys: ƒn keys()
+  lastIndexOf: ƒn lastIndexOf()
+  length: 0n
+  map: ƒn map()
+  pop: ƒn pop()
+  push: ƒn push()
+  reduce: ƒn reduce()
+  reduceRight: ƒn reduceRight()
+  reverse: ƒn reverse()
+  shift: ƒn shift()
+  slice: ƒn slice()
+  some: ƒn some()
+  sort: ƒn sort()
+  splice: ƒn splice()
+  toLocaleString: ƒn toLocaleString()
+  toString: ƒn toString()
+  unshift: ƒn unshift()
+  values: ƒn values()
+*/
+
+```
+
+The exact same logic exists for Objects as well. All objects will delegate to `Object.prototype` on failed lookups which is why all objects have methods like `toString` and `hasOwnProperty`.
+
+## Static Methods
+Up until this point we’ve covered the why and how of sharing methods between instances of a Class. However, what if we had a method that was important to the Class, but didn’t need to be shared across instances? For example, what if we had a function that took in an array of `Animal` instances and determined which one needed to be fed next? We’ll call it `nextToEat`.
+
+```javascript
+
+function nextToEat (animals) {
+  const sortedByLeastEnergy = animals.sort((a,b) => {
+    return a.energy - b.energy
+  })
+
+  return sortedByLeastEnergy[0].name
+}
+
+```
+
+It doesn’t make sense to have `nextToEat` live on `Animal.prototype` since we don’t want to share it amongst all instances. Instead, we can think of it as more of a helper method. So if `nextToEat` shouldn’t live on `Animal.prototype`, where should we put it? Well, the obvious answer is we could just stick `nextToEat` in the same scope as our `Animal` class then reference it when we need it as we normally would.
+
+```javascript
+
+class Animal {
+  constructor(name, energy) {
+    this.name = name
+    this.energy = energy
+  }
+  eat(amount) {
+    console.log(`${this.name} is eating.`)
+    this.energy += amount
+  }
+  sleep(length) {
+    console.log(`${this.name} is sleeping.`)
+    this.energy += length
+  }
+  play(length) {
+    console.log(`${this.name} is playing.`)
+    this.energy -= length
+  }
+}
+
+function nextToEat (animals) {
+  const sortedByLeastEnergy = animals.sort((a,b) => {
+    return a.energy - b.energy
+  })
+
+  return sortedByLeastEnergy[0].name
+}
+
+const leo = new Animal('Leo', 7)
+const snoop = new Animal('Snoop', 10)
+
+console.log(nextToEat([leo, snoop])) // Leo
+
+```
+
+Now this works, but there's a better way.
+
+>Whenever you have a method that is specific to a class itself but doesn't need to be shared across instances of that class, you can add it as a `static` property of the class.
+
+```javascript
+
+class Animal {
+  constructor(name, energy) {
+    this.name = name
+    this.energy = energy
+  }
+  eat(amount) {
+    console.log(`${this.name} is eating.`)
+    this.energy += amount
+  }
+  sleep(length) {
+    console.log(`${this.name} is sleeping.`)
+    this.energy += length
+  }
+  play(length) {
+    console.log(`${this.name} is playing.`)
+    this.energy -= length
+  }
+  static nextToEat(animals) {
+    const sortedByLeastEnergy = animals.sort((a,b) => {
+      return a.energy - b.energy
+    })
+
+    return sortedByLeastEnergy[0].name
+  }
+}
+
+```
