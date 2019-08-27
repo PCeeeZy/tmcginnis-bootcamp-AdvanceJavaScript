@@ -396,3 +396,172 @@ function getWeather(user) {
 }
 
 ```
+
+Looking good. Now the last thing we need to update is our click handler. Remember, here’s the flow we want to take.
+
+>1. Get the user's information from the Github API.
+>2. Use the user's location to get their weather from the Yahoo Weather API.
+>3. Update the UI with the users info and their weather.
+
+Let’s start with #1 - getting the user’s information from the Github API.
+
+```javascript
+
+$("#btn").on("click", () => {
+  const userPromise = getUser('tylermcginnis')
+
+  userPromise.then((user) => {
+
+  })
+
+  userPromise.catch(showError)
+})
+
+```
+
+Notice that now instead of `getUser` taking in two callback functions, it returns us a promise that we can call `.then` and `.catch` on. If `.then` is called, it’ll be called with the user’s information. If `.catch` is called, it’ll be called with the error.
+
+Next let’s do #2 - Use the user’s location to get their weather.
+
+```javascript
+
+$("#btn").on("click", () => {
+  const userPromise = getUser('tylermcginnis')
+
+  userPromise.then((user) => {
+    const weatherPromise = getWeather(user)
+    weatherPromise.then((weather) => {
+
+    })
+
+    weatherPromise.catch(showError)
+  })
+
+  userPromise.catch(showError)
+})
+
+```
+
+Notice we follow the exact same pattern we did in #1 but now we invoke `getWeather` passing it the `user` object we got from `userPromise`.
+
+Finally, #3 - Update the UI with the users info and their weather.
+
+```javascript
+
+$("#btn").on("click", () => {
+  const userPromise = getUser('tylermcginnis')
+
+  userPromise.then((user) => {
+    const weatherPromise = getWeather(user)
+    weatherPromise.then((weather) => {
+      updateUI({
+        user,
+        weather: weather.query.results
+      })
+    })
+
+    weatherPromise.catch(showError)
+  })
+
+  userPromise.catch(showError)
+})
+
+```
+
+[Here’s the full code](https://codesandbox.io/s/l9xrjq88p7) you can play around with.
+
+Our new code is *better*, but there are still some improvement we can make. Before we can make those improvements though, there are two more features of promises you need to be aware of, chaining and passing arguments from `resolve` to `then`.
+
+## Chaining
+Both `.then` and `.catch` will return a new promise. That seems like a small detail but it’s important because it means that promises can be chained.
+
+In the example below, we call `getPromise` which returns us a promise that will resolve in at least 2000 milliseconds. From there, because `.then` will return a promise, we can continue to chain our `.then`s together until we throw a `new Error` which is caught by the `.catch` method.
+
+```javascript
+
+function getPromise () {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 2000)
+  })
+}
+
+function logA () {
+  console.log('A')
+}
+
+function logB () {
+  console.log('B')
+}
+
+function logCAndThrow () {
+  console.log('C')
+
+  throw new Error()
+}
+
+function catchError () {
+  console.log('Error!')
+}
+
+getPromise()
+  .then(logA) // A
+  .then(logB) // B
+  .then(logCAndThrow) // C
+  .catch(catchError) // Error!
+
+```
+
+Cool, but why is this so important? Remember back in the callback section we talked about one of the downfalls of callbacks being that they force you out of your natural, sequential way of thinking. When you chain promises together, it doesn’t force you out of that natural way of thinking because chained promises are sequential. `getPromise runs then logA runs then logB runs then...`.
+
+Just so you can see one more example, here’s a common use case when you use the `fetch` API. `fetch` will return you a promise that will resolve with the HTTP response. To get the actual JSON, you’ll need to call `.json`. Because of chaining, we can think about this in a sequential manner.
+
+```javascript
+
+fetch('/api/user.json')
+  .then((response) => response.json())
+  .then((user) => {
+    // user is now ready to go.
+  })
+
+```
+
+Now that we know about chaining, let’s refactor our `getUser`/`getWeather` code from earlier to use it.
+
+```javascript
+
+function getUser(id) {
+  return new Promise((resolve, reject) => {
+    $.getJSON({
+      url: `https://api.github.com/users/${id}`,
+      success: resolve,
+      error: reject
+    })
+  })
+}
+
+function getWeather(user) {
+  return new Promise((resolve, reject) => {
+    $.getJSON({
+      url: getLocationURL(user.location.split(',')),
+      success: resolve,
+      error: reject,
+    })
+  })
+}
+
+$("#btn").on("click", () => {
+  getUser("tylermcginnis")
+    .then(getWeather)
+    .then((weather) => {
+      // We need both the user and the weather here.
+      // Right now we just have the weather
+      updateUI() // ????
+    })
+    .catch(showError)
+})
+
+```
+
+It *looks* much better, but now we’re running into an issue. Can you spot it? In the second `.then` we want to to call `updateUI`. The problem is we need to pass `updateUI` both the `user` and the `weather`. Currently how we have it set up, we’re only receiving the `weather`, not the `user`. Somehow we need to figure out a way to make it so the promise that `getWeather` returns is resolved with both the `user` and the `weather`.
+
+Here’s the key. `resolve` is just a function. Any arguments you pass to it will be passed along to the function given to .then. What that means is that inside of `getWeather`, if we invoke `resolve` ourself, we can pass to it `weather` and `user`. Then, the second `.then` method in our chain will receive both `user` and `weather` as an argument.
