@@ -694,3 +694,196 @@ for(let key in leo) {
 
 ```
 
+And now what we see are only the properties that are on the `leo` object itself rather than on the prototype `leo` delegates to as well.
+
+```javascript
+
+Key: name. Value: Leo
+Key: energy. Value: 7
+
+```
+
+If you're still a tad confused about `hasOwnProperty`, here is some code that may clear it up.
+
+```javascript
+
+function Animal (name, energy) {
+  this.name = name
+  this.energy = energy
+}
+
+Animal.prototype.eat = function (amount) {
+  console.log(`${this.name} is eating.`)
+  this.energy += amount
+}
+
+Animal.prototype.sleep = function (length) {
+  console.log(`${this.name} is sleeping.`)
+  this.energy += length
+}
+
+Animal.prototype.play = function (length) {
+  console.log(`${this.name} is playing.`)
+  this.energy -= length
+}
+
+const leo = new Animal('Leo', 7)
+
+leo.hasOwnProperty('name') // true
+leo.hasOwnProperty('energy') // true
+leo.hasOwnProperty('eat') // false
+leo.hasOwnProperty('sleep') // false
+leo.hasOwnProperty('play') // false
+
+```
+
+##Check if an object is an instance of a Class
+Sometimes you want to know whether an object is an instance of a specific class. To do this, you can use the `instanceof` operator. The use case is pretty straight forward but the actual syntax is a bit weird if you’ve never seen it before. It works like this
+
+```javascript
+
+object instanceof Class
+
+```
+
+The statement above will return true if `object` is an instance of `Class` and false if it isn’t. Going back to our `Animal` example we’d have something like this.
+
+```javascript
+
+function Animal (name, energy) {
+  this.name = name
+  this.energy = energy
+}
+
+function User () {}
+
+const leo = new Animal('Leo', 7)
+
+leo instanceof Animal // true
+leo instanceof User // false
+
+```
+
+The way that `instanceof` works is it checks for the presence of `constructor.prototype` in the object’s prototype chain. In the example above, `leo instanceof Animal` is true because `Object.getPrototypeOf(leo) === Animal.prototype`. In addition, `leo instanceof User` is false because `Object.getPrototypeOf(leo) !== User.prototype`.
+
+##Creating new agnostic constructor functions
+Can you spot the error in the code below?
+
+```javascript
+
+function Animal (name, energy) {
+  this.name = name
+  this.energy = energy
+}
+
+const leo = Animal('Leo', 7)
+
+```
+
+Even seasoned JavaScript developers will sometimes get tripped up on the example above. Because we’re using the `pseudoclassical pattern` that we learned about earlier, when the `Animal` constructor function is invoked, we need to make sure we invoke it with the `new` keyword. If we don’t, then the `this` keyword won’t be created and it also won’t be implicitly returned.
+
+As a refresher, the commented out lines are what happens behind the scenes when you use the `new` keyword on a function.
+
+```javascript
+
+function Animal (name, energy) {
+  // const this = Object.create(Animal.prototype)
+
+  this.name = name
+  this.energy = energy
+
+  // return this
+}
+
+```
+
+This seems like too important of a detail to leave up to other developers to remember. Assuming we’re working on a team with other developers, is there a way we could ensure that our `Animal` constructor is always invoked with the `new` keyword? Turns out there is and it’s by using the `instanceof` operator we learned about previously.
+
+If the constructor was called with the `new` keyword, then this inside of the body of the constructor will be an `instanceof` the constructor function itself. That was a lot of big words. Here’s some code.
+
+```javascript
+
+function Animal (name, energy) {
+  if (this instanceof Animal === false) {
+    console.warn('Forgot to call Animal with the new keyword')
+  }
+
+  this.name = name
+  this.energy = energy
+}
+
+```
+
+Now instead of just logging a warning to the consumer of the function, what if we re-invoke the function but with the `new` keyword this time?
+
+```javascript
+
+function Animal (name, energy) {
+  if (this instanceof Animal === false) {
+    return new Animal(name, energy)
+  }
+
+  this.name = name
+  this.energy = energy
+}
+
+```
+
+Now regardless of if `Animal` is invoked with the `new` keyword, it’ll still work properly.
+
+##Re-creating Object.creat
+Throughout this post, we’ve relied heavily upon `Object.create` in order to create objects which delegate to the constructor function’s prototype. At this point, you should know how to use `Object.create` inside of your code but one thing that you might not have thought of is how `Object.create` actually works under the hood. In order for you to **really** understand how `Object.create` works, we’re going to re-create it ourselves. First, what do we know about how `Object.create` works?
+
+>1. It takes in an argument that is an object.
+>2. It creates an object that delegates to the argument object on failed lookups.
+>3. It returns the new created object.
+
+Let's start off with #1.
+
+```javascript
+
+Object.create = function (objToDelegateTo) {
+
+}
+
+```
+
+Simple enough.
+
+Now #2 - we need to create an object that will delegate to the argument object on failed lookups. This one is a little more tricky. To do this, we’ll use our knowledge of how the `new` keyword and prototypes work in JavaScript. First, inside the body of our `Object.create` implementation, we’ll create an empty function. Then, we’ll set the prototype of that empty function equal to the argument object. Then, in order to create a new object, we’ll invoke our empty function using the `new` keyword. If we return that newly created object, that’ll finish #3 as well.
+
+```javascript
+
+Object.create = function (objToDelegateTo) {
+  function Fn(){}
+  Fn.prototype = objToDelegateTo
+  return new Fn()
+}
+
+```
+
+Wild. Let’s walk through it.
+
+When we create a new function, `Fn` in the code above, it comes with a `prototype` property. When we invoke it with the `new` keyword, we know what we’ll get back is an object that will delegate to the function’s prototype on failed lookups. If we override the function’s prototype, then we can decide which object to delegate to on failed lookups. So in our example above, we override `Fn's` prototype with the object that was passed in when `Object.create` was invoked which we call `objToDelegateTo`.
+
+>Note that we’re only supporting a single argument to Object.create. The official implementation also supports a second, optional argument which allows you to add more properties to the created object.
+
+##Arrow Functions
+Arrow functions don’t have their own `this` keyword. As a result, arrow functions can’t be constructor functions and if you try to invoke an arrow function with the `new` keyword, it’ll throw an error.
+
+```javascript
+
+const Animal = () => {}
+
+const leo = new Animal() // Error: Animal is not a constructor
+
+```
+
+Also, because we demonstrated above that the pseudo-classical pattern can’t be used with arrow functions, arrow functions also don’t have a `prototype` property.
+
+```javascript
+
+const Animal = () => {}
+console.log(Animal.prototype) // undefined
+
+```
