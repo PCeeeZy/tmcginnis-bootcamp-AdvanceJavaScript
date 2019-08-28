@@ -505,3 +505,192 @@ class Animal {
 }
 
 ```
+
+Now, because we added `nextToEat` as a `static` property on the class, it lives on the `Animal` class itself (not its prototype) and can be accessed using `Animal.nextToEat`.
+
+```javascript
+
+const leo = new Animal('Leo', 7)
+const snoop = new Animal('Snoop', 10)
+
+console.log(Animal.nextToEat([leo, snoop])) // Leo
+
+```
+
+Because we’ve followed a similar pattern throughout this post, let’s take a look at how we would accomplish this same thing using ES5. In the example above we saw how using the `static` keyword would put the method directly onto the class itself. With ES5, this same pattern is as simple as just manually adding the method to the function object.
+
+```javascript
+
+function Animal (name, energy) {
+  this.name = name
+  this.energy = energy
+}
+
+Animal.prototype.eat = function (amount) {
+  console.log(`${this.name} is eating.`)
+  this.energy += amount
+}
+
+Animal.prototype.sleep = function (length) {
+  console.log(`${this.name} is sleeping.`)
+  this.energy += length
+}
+
+Animal.prototype.play = function (length) {
+  console.log(`${this.name} is playing.`)
+  this.energy -= length
+}
+
+Animal.nextToEat = function (nextToEat) {
+  const sortedByLeastEnergy = animals.sort((a,b) => {
+    return a.energy - b.energy
+  })
+
+  return sortedByLeastEnergy[0].name
+}
+
+const leo = new Animal('Leo', 7)
+const snoop = new Animal('Snoop', 10)
+
+console.log(Animal.nextToEat([leo, snoop])) // Leo
+
+```
+
+## Getting the prototype of an object
+Regardless of whichever pattern =you used to create an object, getting that object's prototype can be accomplished using the `Object.getPrototypeOf` method.
+
+```javascript
+
+function Animal (name, energy) {
+  this.name = name
+  this.energy = energy
+}
+
+Animal.prototype.eat = function (amount) {
+  console.log(`${this.name} is eating.`)
+  this.energy += amount
+}
+
+Animal.prototype.sleep = function (length) {
+  console.log(`${this.name} is sleeping.`)
+  this.energy += length
+}
+
+Animal.prototype.play = function (length) {
+  console.log(`${this.name} is playing.`)
+  this.energy -= length
+}
+
+const leo = new Animal('Leo', 7)
+const prototype = Object.getPrototypeOf(leo)
+
+console.log(prototype)
+// {constructor: ƒ, eat: ƒ, sleep: ƒ, play: ƒ}
+
+prototype === Animal.prototype // true
+
+```
+
+There are two important takeaways from the code above.
+
+First, you’ll notice that proto is an object with 4 methods, `constructor`, `eat`, `sleep`, and `play`. That makes sense. We used `getPrototypeOf` passing in the instance, `leo` getting back that instances’ prototype, which is where all of our methods are living. This tells us one more thing about prototype as well that we haven’t talked about yet. By default, the `prototype` object will have a `constructor` property which points to the original function or the class that the instance was created from. What this also means is that because JavaScript puts a `constructor` property on the prototype by default, any instances will be able to access their constructor via `instance.constructor`.
+
+The second important takeaway from above is that `Object.getPrototypeOf(leo) === Animal.prototype`. That makes sense as well. The `Animal` constructor function has a prototype property where we can share methods across all instances and `getPrototypeOf` allows us to see the prototype of the instance itself.
+
+```javascript
+
+function Animal (name, energy) {
+  this.name = name
+  this.energy = energy
+}
+
+const leo = new Animal('Leo', 7)
+console.log(leo.constructor) // Logs the constructor function
+
+```
+
+To tie in what we talked about earlier with `Object.create`, the reason this works is because any instances of `Animal` are going to delegate to `Animal.prototype` on failed lookups. So when you try to access `leo.constructor`, `leo` doesn’t have a `constructor` property so it will delegate that lookup to `Animal.prototype` which indeed does have a `constructor` property. If this paragraph didn’t make sense, go back and read about `Object.create` above.
+
+>You may have seen __proto__ used before to get an instances’ prototype. That’s a relic of the past. Instead, use **Object.getPrototypeOf(instance)** as we saw above.
+
+##Determining if a property lives on the prototype
+There are certain cases where you need to know if a property lives on the instance itself or if it lives on the prototype the object delegates to. We can see this in action by looping over our `leo` object we’ve been creating. Let’s say the goal was the loop over `leo` and log all of its keys and values. Using a `for in` loop, that would probably look like this.
+
+```javascript
+
+function Animal (name, energy) {
+  this.name = name
+  this.energy = energy
+}
+
+Animal.prototype.eat = function (amount) {
+  console.log(`${this.name} is eating.`)
+  this.energy += amount
+}
+
+Animal.prototype.sleep = function (length) {
+  console.log(`${this.name} is sleeping.`)
+  this.energy += length
+}
+
+Animal.prototype.play = function (length) {
+  console.log(`${this.name} is playing.`)
+  this.energy -= length
+}
+
+const leo = new Animal('Leo', 7)
+
+for(let key in leo) {
+  console.log(`Key: ${key}. Value: ${leo[key]}`)
+}
+
+```
+
+What would you expect to see?  Most likely, it was something like this-
+
+```javascript
+
+Key: name. Value: Leo
+Key: energy. Value: 7
+
+```
+
+However, what you saw if you ran the code was this -
+
+```javascript
+
+Key: name. Value: Leo
+Key: energy. Value: 7
+Key: eat. Value: function (amount) {
+  console.log(`${this.name} is eating.`)
+  this.energy += amount
+}
+Key: sleep. Value: function (length) {
+  console.log(`${this.name} is sleeping.`)
+  this.energy += length
+}
+Key: play. Value: function (length) {
+  console.log(`${this.name} is playing.`)
+  this.energy -= length
+}
+
+```
+
+Why is that? Well, a `for in` loop is going to loop over all of the **enumerable properties** on both the object itself as well as the prototype it delegates to. Because by default any property you add to the function’s prototype is enumerable, we see not only `name` and `energy`, but we also see all the methods on the prototype - `eat`, `sleep`, and `play`. To fix this, we either need to specify that all of the prototype methods are non-enumerable **or** we need a way to only console.log if the property is on the `leo` object itself and not the prototype that `leo` delegates to on failed lookups. This is where `hasOwnProperty` can help us out.
+
+`hasOwnProperty` is a property on every object that returns a boolean indicating whether the object has the specified property as its own property rather than on the prototype the object delegates to. That’s exactly what we need. Now with this new knowledge, we can modify our code to take advantage of `hasOwnProperty` inside of our `for in` loop.
+
+```javascript
+
+...
+
+const leo = new Animal('Leo', 7)
+
+for(let key in leo) {
+  if (leo.hasOwnProperty(key)) {
+    console.log(`Key: ${key}. Value: ${leo[key]}`)
+  }
+}
+
+```
+
