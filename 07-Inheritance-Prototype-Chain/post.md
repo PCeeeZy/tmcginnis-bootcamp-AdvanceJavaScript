@@ -301,3 +301,396 @@ console.log(leo.constructor) // Logs the constructor function
 
 ```
 
+As explained in the previous post, “the reason this works is because any instances of `Animal` are going to delegate to `Animal.prototype` on failed lookups. So when you try to access `leo.constructor`, `leo` doesn’t have a `constructor` property so it will delegate that lookup to `Animal.prototype` which indeed does have a `constructor` property.”
+
+The reason I bring this up is because in our implementation, we overwrote `Dog.prototype` with an object that delegates to `Animal.prototype`.
+
+```javascript
+
+function Dog (name, energy, breed) {
+  Animal.call(this, name, energy)
+
+  this.breed = breed
+}
+
+Dog.prototype = Object.create(Animal.prototype)
+
+Dog.prototype.bark = function () {
+  console.log('Woof Woof!')
+  this.energy -= .1
+}
+
+```
+
+What that means is that now, any instances of `Dog` which log `instance.constructor` are going to get the `Animal` constructor rather than the `Dog` constructor.  You can see for yourself by running this code -
+
+```javascript
+
+function Animal (name, energy) {
+  this.name = name
+  this.energy = energy
+}
+
+Animal.prototype.eat = function (amount) {
+  console.log(`${this.name} is eating.`)
+  this.energy += amount
+}
+
+Animal.prototype.sleep = function (length) {
+  console.log(`${this.name} is sleeping.`)
+  this.energy += length
+}
+
+Animal.prototype.play = function (length) {
+  console.log(`${this.name} is playing.`)
+  this.energy -= length
+}
+
+function Dog (name, energy, breed) {
+  Animal.call(this, name, energy)
+
+  this.breed = breed
+}
+
+Dog.prototype = Object.create(Animal.prototype)
+
+Dog.prototype.bark = function () {
+  console.log('Woof Woof!')
+  this.energy -= .1
+}
+
+const charlie = new Dog('Charlie', 10, 'Goldendoodle')
+console.log(charlie.constructor)
+
+```
+
+Notice it give you the `Animal` constructor even though `charlie` is a direct instance of `Dog`.  Again, we can walk through what's happening here just like we did above.
+
+```javascript
+
+const charlie = new Dog('Charlie', 10, 'Goldendoodle')
+console.log(charlie.constructor)
+
+/*
+1) JavaScript checks if charlie has a constructor property - it doesn't.
+2) JavaScript then checks if Dog.prototype has a constructor property
+    - it doesn't because it was deleted when we overwrote Dog.prototype.
+3) JavaScript then checks if Animal.prototype has a constructor property
+    - it does so it logs that.
+*/
+
+```
+
+How can we fix this? Well, it's pretty simple.  We can just add the correct `constructor` property to `Dog.prototype` once we overwrite it.
+
+```javascript
+
+function Dog (name, energy, breed) {
+  Animal.call(this, name, energy)
+
+  this.breed = breed
+}
+
+Dog.prototype = Object.create(Animal.prototype)
+
+Dog.prototype.bark = function () {
+  console.log('Woof Woof!')
+  this.energy -= .1
+}
+
+Dog.prototype.constructor = Dog
+
+```
+
+---
+
+At this point, if we wanted to make another subclass, say `Cat`, we'd follow the same patter.
+
+```javascript
+
+function Cat (name, energy, declawed) {
+  Animal.call(this, name, energy)
+
+  this.declawed = declawed
+}
+
+Cat.prototype = Object.create(Animal.prototype)
+Cat.prototype.constructor = Cat
+
+Cat.prototype.meow = function () {
+  console.log('Meow!')
+  this.energy -= .1
+}
+
+```
+
+This concept of having a base class with subclasses that delegate to it is called **inheritance** and it’s a staple of **Object Oriented Programming (OOP)**. If you’re coming from a different programming language, odds are you’re already familiar with OOP and inheritance. Before ES6 classes, in JavaScript, inheritance was quite the task as you can see above. You need to understand now only **when** to use inheritance, but also a nice mix of `.call`, `Object.create`, `this`, and `FN.prototype` - all pretty advanced JS topics. Let’s see how we’d accomplish the same thing using ES6 classes though.
+
+First, let’s review what it looks like to go from an ES5 “class” to an ES6 class using our `Animal` class.
+
+---
+
+```javascript
+
+function Animal (name, energy) {
+  this.name = name
+  this.energy = energy
+}
+
+Animal.prototype.eat = function (amount) {
+  console.log(`${this.name} is eating.`)
+  this.energy += amount
+}
+
+Animal.prototype.sleep = function (length) {
+  console.log(`${this.name} is sleeping.`)
+  this.energy += length
+}
+
+Animal.prototype.play = function (length) {
+  console.log(`${this.name} is playing.`)
+  this.energy -= length
+}
+
+const leo = new Animal('Leo', 7)
+
+```
+
+---
+
+```javascript
+
+class Animal {
+  constructor(name, energy) {
+    this.name = name
+    this.energy = energy
+  }
+  eat(amount) {
+    console.log(`${this.name} is eating.`)
+    this.energy += amount
+  }
+  sleep() {
+    console.log(`${this.name} is sleeping.`)
+    this.energy += length
+  }
+  play() {
+    console.log(`${this.name} is playing.`)
+    this.energy -= length
+  }
+}
+
+const leo = new Animal('Leo', 7)
+
+```
+
+---
+
+
+Now that we've refactored our `Animal` constructor function into an ES6 class, the next thing we need to do is figure out how to refactor our base class ( `Dog` ).  The good news is it's much more intuitive.  For reference, in ES5, here's what we had.
+
+```javascript
+
+function Dog (name, energy, breed) {
+  Animal.call(this, name, energy)
+
+  this.breed = breed
+}
+
+Dog.prototype = Object.create(Animal.prototype)
+
+Dog.prototype.bark = function () {
+  console.log('Woof Woof!')
+  this.energy -= .1
+}
+
+Dog.prototype.constructor = Dog
+
+```
+
+Before we get into inheritance, let's refactor `Dog` to use an ES6 class as we learned in a previous post.
+
+```javascript
+
+class Dog {
+  constructor(name, energy, breed) {
+    this.breed = breed
+  }
+  bark() {
+    console.log('Woof Woof!')
+    this.energy -= .1
+  }
+}
+
+```
+
+Looks great.  Now, let's figure out how to make sure that `Dog` inherits from `Animal`.  The first step we need to make is a pretty straight forward one.  With ES6 classes, you can `extend` a base class with this syntax.
+
+```javascript
+
+class Sublcass extends BaseClass {}
+
+```
+
+Translated into our example, that would make our `Dog` class look like this
+
+```javascript
+
+class Animal {
+  constructor(name, energy) {
+    this.name = name
+    this.energy = energy
+  }
+  eat(amount) {
+    console.log(`${this.name} is eating.`)
+    this.energy += amount
+  }
+  sleep() {
+    console.log(`${this.name} is sleeping.`)
+    this.energy += length
+  }
+  play() {
+    console.log(`${this.name} is playing.`)
+    this.energy -= length
+  }
+}
+
+class Dog extends Animal {
+  constructor(name, energy, breed) {
+    this.breed = breed
+  }
+  bark() {
+    console.log('Woof Woof!')
+    this.energy -= .1
+  }
+}
+
+```
+
+In ES5 in order to make sure that every instance of `Dog` had a `name` and an `energy` property, we used `.call` in order to invoke the `Animal` constructor function in the context of the `Dog` instance.  Luckily for us, in ES6 it's much more straight forward.  Whenever you are extending a base class and you need to invoke that base class' constructor function, you invoke `super` passing it any arguments it needs.  So in our example, our `Dog` constructor gets refactored to look like this
+
+```javascript
+
+class Animal {
+  constructor(name, energy) {
+    this.name = name
+    this.energy = energy
+  }
+  eat(amount) {
+    console.log(`${this.name} is eating.`)
+    this.energy += amount
+  }
+  sleep() {
+    console.log(`${this.name} is sleeping.`)
+    this.energy += length
+  }
+  play() {
+    console.log(`${this.name} is playing.`)
+    this.energy -= length
+  }
+}
+
+class Dog extends Animal {
+  constructor(name, energy, breed) {
+    super(name, energy) // calls Animal's constructor
+
+    this.breed = breed
+  }
+  bark() {
+    console.log('Woof Woof!')
+    this.energy -= .1
+  }
+}
+
+```
+
+And that’s it. No using `.call`, no using `Object.create`, no worrying about resetting `constructor` on the prototype - just `extends` the base class and make sure to call `super`.
+
+---
+
+What's interesting about Javascript is the same patterns you've learned these last few posts are directly caked into the language itself.  Previously you learned that the reason all instances of `Array` have access to the array methods like `pop`, `slice`, `filter`, etc. is because all of those methods live on `Array.prototype`.
+
+```javascript
+
+console.log(Array.prototype)
+
+/*
+  concat: ƒn concat()
+  constructor: ƒn Array()
+  copyWithin: ƒn copyWithin()
+  entries: ƒn entries()
+  every: ƒn every()
+  fill: ƒn fill()
+  filter: ƒn filter()
+  find: ƒn find()
+  findIndex: ƒn findIndex()
+  forEach: ƒn forEach()
+  includes: ƒn includes()
+  indexOf: ƒn indexOf()
+  join: ƒn join()
+  keys: ƒn keys()
+  lastIndexOf: ƒn lastIndexOf()
+  length: 0n
+  map: ƒn map()
+  pop: ƒn pop()
+  push: ƒn push()
+  reduce: ƒn reduce()
+  reduceRight: ƒn reduceRight()
+  reverse: ƒn reverse()
+  shift: ƒn shift()
+  slice: ƒn slice()
+  some: ƒn some()
+  sort: ƒn sort()
+  splice: ƒn splice()
+  toLocaleString: ƒn toLocaleString()
+  toString: ƒn toString()
+  unshift: ƒn unshift()
+  values: ƒn values()
+*/
+
+```
+
+You also learned that the reason all instances of `Object` have access to methods like `hasOwnProperty` and `toString` is because those methods live on `Object.prototype`.
+
+```javascript
+
+console.log(Object.prototype)
+
+/*
+  constructor: ƒn Object()
+  hasOwnProperty: ƒn hasOwnProperty()
+  isPrototypeOf: ƒn isPrototypeOf()
+  propertyIsEnumerable: ƒn propertyIsEnumerable()
+  toLocaleString: ƒn toLocaleString()
+  toString: ƒn toString()
+  valueOf: ƒn valueOf()
+*/
+
+```
+
+Here's a challenge for you.  With the list of Array methods and Object methods above, why does this code work below?
+
+```javascript
+
+const friends = ['Mikenzi', 'Jake', 'Ean']
+
+friends.hasOwnProperty('push')  // false
+
+```
+
+If you look at `Array.prototype`, there isn’t a `hasOwnProperty` method. Well if there isn’t a `hasOwnProperty` method located on `Array.prototype`, how does the `friends` array in the example above have access to `hasOwnProperty`? The reason for that is because the `Array` class extends the `Object` class. So in our example above, when JavaScript sees that `friends` doesn’t have a `hasOwnProperty` property, it checks if `Array.prototype` does. When `Array.prototype` doesn’t, it checks if `Object.prototype` does, then it invokes it. It’s the same process we’ve seen throughout this blog post.
+
+JavaScript has two types - **Primitive** types and **Reference** types.
+
+Primitive types are `boolean`, `number`, `string`, `null`, and `undefined` and are immutable. Everything else is a reference type and they all extend `Object.prototype`. That’s why you can add properties to functions and arrays and that’s why both functions and arrays have access to the methods located on `Object.prototype`.
+
+```javascript
+
+function speak(){}
+speak.woahFunctionsAreLikeObjects = true
+console.log(speak.woahFunctionsAreLikeObjects) // true
+
+const friends = ['Mikenzi', 'Jake', 'Ean']
+friends.woahArraysAreLikeObjectsToo = true
+console.log(friends.woahArraysAreLikeObjectsToo) // true
+
+```
